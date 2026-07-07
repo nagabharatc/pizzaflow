@@ -3,35 +3,42 @@ import { Plus, Minus, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn, formatCurrency } from '@/lib/utils'
-import type { MenuItem } from '@/types'
+import type { Base, MenuItem, Topping } from '@/types'
 import type { CartItem } from '../types'
 
 interface PizzaCardProps {
   item: MenuItem
+  bases: Base[]
+  toppings: Topping[]
   onAdd: (cartItem: CartItem) => void
 }
 
-function PizzaCard({ item, onAdd }: PizzaCardProps) {
+function PizzaCard({ item, bases, toppings, onAdd }: PizzaCardProps) {
   const [expanded, setExpanded] = useState(false)
-  const [base, setBase] = useState(item.available_bases[0] ?? '')
-  const [toppings, setToppings] = useState<string[]>([])
+  const [baseCode, setBaseCode] = useState(bases[0]?.code ?? '')
+  const [toppingCodes, setToppingCodes] = useState<string[]>([])
   const [qty, setQty] = useState(1)
 
-  const toggleTopping = (t: string) =>
-    setToppings((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]))
+  const toggleTopping = (code: string) =>
+    setToppingCodes((prev) => (prev.includes(code) ? prev.filter((x) => x !== code) : [...prev, code]))
+
+  const selectedBase = bases.find((b) => b.code === baseCode)
+  const selectedToppings = toppings.filter((t) => toppingCodes.includes(t.code))
+  const unitPrice = item.price + (selectedBase?.price ?? 0) + selectedToppings.reduce((sum, t) => sum + t.price, 0)
 
   const handleAdd = () => {
+    if (!selectedBase) return
     onAdd({
       menuItemId: item.id,
       name: item.name,
       category: item.category,
-      baseSelected: base,
-      toppingsSelected: toppings,
+      baseSelected: selectedBase.name,
+      toppingsSelected: selectedToppings.map((t) => t.name),
       quantity: qty,
-      unitPrice: item.price,
+      unitPrice,
     })
     setExpanded(false)
-    setToppings([])
+    setToppingCodes([])
     setQty(1)
   }
 
@@ -73,44 +80,44 @@ function PizzaCard({ item, onAdd }: PizzaCardProps) {
               Crust
             </p>
             <div className="flex flex-wrap gap-2">
-              {item.available_bases.map((b) => (
+              {bases.map((b) => (
                 <button
-                  key={b}
+                  key={b.code}
                   type="button"
-                  onClick={() => setBase(b)}
+                  onClick={() => setBaseCode(b.code)}
                   className={cn(
                     'rounded-full border px-3 py-1 text-sm transition-colors duration-100',
-                    base === b
+                    baseCode === b.code
                       ? 'border-primary bg-primary text-primary-foreground'
                       : 'border-border bg-card text-foreground hover:border-primary/50',
                   )}
                 >
-                  {b}
+                  {b.name} (+{formatCurrency(b.price)})
                 </button>
               ))}
             </div>
           </div>
 
           {/* Toppings */}
-          {item.available_toppings.length > 0 && (
+          {toppings.length > 0 && (
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Extra Toppings
               </p>
               <div className="flex flex-wrap gap-2">
-                {item.available_toppings.map((t) => (
+                {toppings.map((t) => (
                   <button
-                    key={t}
+                    key={t.code}
                     type="button"
-                    onClick={() => toggleTopping(t)}
+                    onClick={() => toggleTopping(t.code)}
                     className={cn(
                       'rounded-full border px-3 py-1 text-sm transition-colors duration-100',
-                      toppings.includes(t)
+                      toppingCodes.includes(t.code)
                         ? 'border-primary bg-primary text-primary-foreground'
                         : 'border-border bg-card text-foreground hover:border-primary/50',
                     )}
                   >
-                    {t}
+                    {t.name} (+{formatCurrency(t.price)})
                   </button>
                 ))}
               </div>
@@ -141,10 +148,15 @@ function PizzaCard({ item, onAdd }: PizzaCardProps) {
               </Button>
             </div>
 
-            <Button type="button" size="sm" onClick={handleAdd}>
-              <Plus className="h-3.5 w-3.5" />
-              Add to Order
-            </Button>
+            <div className="flex items-center gap-3">
+              <span className="font-mono-numbers text-sm font-medium text-foreground">
+                {formatCurrency(unitPrice)}
+              </span>
+              <Button type="button" size="sm" onClick={handleAdd} disabled={!selectedBase}>
+                <Plus className="h-3.5 w-3.5" />
+                Add to Order
+              </Button>
+            </div>
           </div>
         </div>
       )}
@@ -154,10 +166,12 @@ function PizzaCard({ item, onAdd }: PizzaCardProps) {
 
 interface PizzaBuilderProps {
   items: MenuItem[]
+  bases: Base[]
+  toppings: Topping[]
   onAdd: (cartItem: CartItem) => void
 }
 
-export function PizzaBuilder({ items, onAdd }: PizzaBuilderProps) {
+export function PizzaBuilder({ items, bases, toppings, onAdd }: PizzaBuilderProps) {
   const categories = [...new Set(items.map((i) => i.category))]
 
   return (
@@ -171,7 +185,7 @@ export function PizzaBuilder({ items, onAdd }: PizzaBuilderProps) {
             {items
               .filter((i) => i.category === cat)
               .map((item) => (
-                <PizzaCard key={item.id} item={item} onAdd={onAdd} />
+                <PizzaCard key={item.id} item={item} bases={bases} toppings={toppings} onAdd={onAdd} />
               ))}
           </div>
         </div>

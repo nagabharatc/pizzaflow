@@ -11,8 +11,7 @@ from app.contexts.reference.entities.menu_item import MenuItem
 @pytest.fixture
 def paid_order(db_session) -> Order:
     menu_item = MenuItem(
-        name="Margherita", category="Classic",
-        available_bases=["Thin Crust"], available_toppings=["Mozzarella"],
+        code="P1", name="Margherita", category="Pizza",
         price=299.0, is_available=True,
     )
     db_session.add(menu_item)

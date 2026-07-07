@@ -2,8 +2,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from app.contexts.reference.entities.base import Base
 from app.contexts.reference.entities.menu_item import MenuItem
+from app.contexts.reference.entities.topping import Topping
+from app.contexts.reference.repositories.base_repository import BaseRepository
 from app.contexts.reference.repositories.menu_repository import MenuRepository
+from app.contexts.reference.repositories.topping_repository import ToppingRepository
 from app.contexts.reference.schemas.menu_schemas import MenuResponse
 from app.contexts.reference.service import MenuLoader
 
@@ -14,19 +18,26 @@ def mock_repository() -> MenuRepository:
 
 
 @pytest.fixture
-def service(mock_repository: MenuRepository) -> MenuLoader:
-    return MenuLoader(mock_repository)
+def mock_base_repository() -> BaseRepository:
+    return MagicMock(spec=BaseRepository)
 
 
-def test_load_menu_returns_menu_response(service, mock_repository):
+@pytest.fixture
+def mock_topping_repository() -> ToppingRepository:
+    return MagicMock(spec=ToppingRepository)
+
+
+@pytest.fixture
+def service(mock_repository, mock_base_repository, mock_topping_repository) -> MenuLoader:
+    return MenuLoader(mock_repository, mock_base_repository, mock_topping_repository)
+
+
+def test_load_menu_returns_menu_response(service, mock_repository, mock_base_repository, mock_topping_repository):
     mock_repository.get_available_items.return_value = [
-        MenuItem(
-            id=1, name="Margherita", category="Classic",
-            available_bases=["Thin Crust", "Thick Crust"],
-            available_toppings=["Mozzarella", "Tomato"],
-            price=299.0, is_available=True,
-        ),
+        MenuItem(id=1, code="P1", name="Margherita", category="Pizza", price=299.0, is_available=True),
     ]
+    mock_base_repository.get_all.return_value = []
+    mock_topping_repository.get_all.return_value = []
 
     result = service.load_menu()
 
@@ -34,11 +45,12 @@ def test_load_menu_returns_menu_response(service, mock_repository):
     assert len(result.items) == 1
     assert result.items[0].name == "Margherita"
     assert result.items[0].price == 299.0
-    assert result.items[0].available_bases == ["Thin Crust", "Thick Crust"]
 
 
-def test_load_menu_returns_empty_list_when_no_items(service, mock_repository):
+def test_load_menu_returns_empty_list_when_no_items(service, mock_repository, mock_base_repository, mock_topping_repository):
     mock_repository.get_available_items.return_value = []
+    mock_base_repository.get_all.return_value = []
+    mock_topping_repository.get_all.return_value = []
 
     result = service.load_menu()
 
@@ -46,67 +58,74 @@ def test_load_menu_returns_empty_list_when_no_items(service, mock_repository):
     mock_repository.get_available_items.assert_called_once()
 
 
-def test_load_menu_maps_all_fields(service, mock_repository):
-    mock_repository.get_available_items.return_value = [
-        MenuItem(
-            id=7, name="BBQ Chicken", category="Non-Veg",
-            available_bases=["Thin Crust"],
-            available_toppings=["Grilled Chicken", "BBQ Sauce"],
-            price=449.0, is_available=True,
-        ),
-    ]
+def test_load_menu_includes_bases_and_toppings(service, mock_repository, mock_base_repository, mock_topping_repository):
+    mock_repository.get_available_items.return_value = []
+    mock_base_repository.get_all.return_value = [Base(id=1, code="B1", name="Thin Crust", price=149.0)]
+    mock_topping_repository.get_all.return_value = [Topping(id=1, code="T1", name="Mozzarella", price=69.0)]
 
     result = service.load_menu()
 
-    item = result.items[0]
-    assert item.id == 7
-    assert item.category == "Non-Veg"
-    assert item.available_toppings == ["Grilled Chicken", "BBQ Sauce"]
+    assert len(result.bases) == 1
+    assert result.bases[0].name == "Thin Crust"
+    assert len(result.toppings) == 1
+    assert result.toppings[0].name == "Mozzarella"
 
 
-def test_seed_skips_when_database_already_populated(service, mock_repository, tmp_path):
+def test_seed_pizzas_skips_when_database_already_populated(service, mock_repository, tmp_path):
     mock_repository.count.return_value = 3
 
-    csv_file = tmp_path / "menu.csv"
-    csv_file.write_text("name,category,available_bases,available_toppings,price\n")
+    txt_file = tmp_path / "pizzas.txt"
+    txt_file.write_text("P1;Margherita;299\n")
 
-    service.seed_from_file(str(csv_file))
+    service.seed_pizzas_from_file(str(txt_file))
 
     mock_repository.save_items.assert_not_called()
 
 
-def test_seed_loads_items_from_csv_when_empty(service, mock_repository, tmp_path):
+def test_seed_pizzas_loads_items_from_file_when_empty(service, mock_repository, tmp_path):
     mock_repository.count.return_value = 0
 
-    csv_file = tmp_path / "menu.csv"
-    csv_file.write_text(
-        "name,category,available_bases,available_toppings,price\n"
-        "Margherita,Classic,Thin Crust|Thick Crust,Mozzarella|Tomato,299.00\n"
-        "Pepperoni,Non-Veg,Thin Crust,Pepperoni|Mozzarella,399.00\n"
-    )
+    txt_file = tmp_path / "pizzas.txt"
+    txt_file.write_text("P1;Margherita;299\nP2;Pepperoni;399\nP3;Farmhouse;349\n")
 
-    service.seed_from_file(str(csv_file))
+    service.seed_pizzas_from_file(str(txt_file))
 
     mock_repository.save_items.assert_called_once()
     saved = mock_repository.save_items.call_args[0][0]
-    assert len(saved) == 2
+    assert len(saved) == 3
+    assert saved[0].code == "P1"
     assert saved[0].name == "Margherita"
-    assert saved[0].available_bases == ["Thin Crust", "Thick Crust"]
-    assert saved[1].name == "Pepperoni"
-    assert saved[1].price == 399.0
+    assert saved[0].price == 299.0
+    assert saved[0].category == "Pizza"
 
 
-def test_seed_parses_pipe_separated_bases_and_toppings(service, mock_repository, tmp_path):
-    mock_repository.count.return_value = 0
+def test_seed_bases_loads_items_from_file_when_empty(service, mock_base_repository, tmp_path):
+    mock_base_repository.count.return_value = 0
 
-    csv_file = tmp_path / "menu.csv"
-    csv_file.write_text(
-        "name,category,available_bases,available_toppings,price\n"
-        "Farmhouse,Veg,Thin Crust|Thick Crust|Stuffed Crust,Corn|Capsicum|Onion,349.00\n"
-    )
+    txt_file = tmp_path / "bases.txt"
+    txt_file.write_text("B1;Thin Crust;149\nB2;Thick Crust;179\nB3;Stuffed Crust;229\n")
 
-    service.seed_from_file(str(csv_file))
+    service.seed_bases_from_file(str(txt_file))
 
-    saved = mock_repository.save_items.call_args[0][0]
-    assert saved[0].available_bases == ["Thin Crust", "Thick Crust", "Stuffed Crust"]
-    assert saved[0].available_toppings == ["Corn", "Capsicum", "Onion"]
+    mock_base_repository.save_items.assert_called_once()
+    saved = mock_base_repository.save_items.call_args[0][0]
+    assert len(saved) == 3
+    assert saved[0].code == "B1"
+    assert saved[0].name == "Thin Crust"
+    assert saved[0].price == 149.0
+
+
+def test_seed_toppings_loads_items_from_file_when_empty(service, mock_topping_repository, tmp_path):
+    mock_topping_repository.count.return_value = 0
+
+    txt_file = tmp_path / "toppings.txt"
+    txt_file.write_text("T1;Mozzarella;69\nT2;Pepperoni;69\nT3;Jalapenos;39\n")
+
+    service.seed_toppings_from_file(str(txt_file))
+
+    mock_topping_repository.save_items.assert_called_once()
+    saved = mock_topping_repository.save_items.call_args[0][0]
+    assert len(saved) == 3
+    assert saved[0].code == "T1"
+    assert saved[0].name == "Mozzarella"
+    assert saved[0].price == 69.0

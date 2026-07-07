@@ -1,0 +1,3 @@
+T1;Mozzarella;69
+T2;Pepperoni;69
+T3;Jalapenos;39

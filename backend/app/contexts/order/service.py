@@ -7,24 +7,34 @@ from app.contexts.order.schemas.order_schemas import (
     OrderItemResponse,
     PendingOrderResponse,
 )
+from app.contexts.reference.repositories.base_repository import BaseRepository
 from app.contexts.reference.repositories.menu_repository import MenuRepository
+from app.contexts.reference.repositories.topping_repository import ToppingRepository
 from app.shared.exceptions import BusinessRuleViolationError, ResourceNotFoundError
 
 
 class OrderService:
-    def __init__(self, order_repository: OrderRepository, menu_repository: MenuRepository):
+    def __init__(
+        self,
+        order_repository: OrderRepository,
+        menu_repository: MenuRepository,
+        base_repository: BaseRepository,
+        topping_repository: ToppingRepository,
+    ):
         self._order_repo = order_repository
         self._menu_repo = menu_repository
+        self._base_repo = base_repository
+        self._topping_repo = topping_repository
 
     def submit_order(
         self,
         customer_data: CustomerRequest,
         items: list[OrderItemRequest],
     ) -> PendingOrderResponse:
-        menu_items = self._validate_and_collect_menu_items(items)
+        resolved_items = self._validate_and_resolve_items(items)
         customer = self._find_or_create_customer(customer_data)
         order = self._order_repo.save_order(customer.id)
-        order_items = self._build_and_save_order_items(order.id, items, menu_items)
+        order_items = self._build_and_save_order_items(order.id, resolved_items)
 
         return PendingOrderResponse(
             order_id=order.id,
@@ -33,19 +43,19 @@ class OrderService:
             items=[
                 OrderItemResponse(
                     menu_item_id=oi.menu_item_id,
-                    name=menu_items[oi.menu_item_id].name,
+                    name=resolved["menu_item"].name,
                     base_selected=oi.base_selected,
                     toppings_selected=oi.toppings_selected,
                     quantity=oi.quantity,
                     unit_price=oi.unit_price,
                 )
-                for oi in order_items
+                for oi, resolved in zip(order_items, resolved_items)
             ],
             created_at=order.created_at,
         )
 
-    def _validate_and_collect_menu_items(self, items: list[OrderItemRequest]) -> dict:
-        menu_items = {}
+    def _validate_and_resolve_items(self, items: list[OrderItemRequest]) -> list[dict]:
+        resolved = []
         for item in items:
             menu_item = self._menu_repo.get_by_id(item.menu_item_id)
 
@@ -59,21 +69,32 @@ class OrderService:
                     message=f"'{menu_item.name}' is not currently available",
                     detail=f"menu_item_id: {item.menu_item_id}",
                 )
-            if item.base_selected not in menu_item.available_bases:
+
+            base = self._base_repo.get_by_name(item.base_selected)
+            if base is None:
                 raise BusinessRuleViolationError(
                     message=f"Base '{item.base_selected}' is not available for '{menu_item.name}'",
                     detail=f"base_selected: {item.base_selected}",
                 )
-            for topping in item.toppings_selected:
-                if topping not in menu_item.available_toppings:
+
+            toppings = []
+            for topping_name in item.toppings_selected:
+                topping = self._topping_repo.get_by_name(topping_name)
+                if topping is None:
                     raise BusinessRuleViolationError(
-                        message=f"Topping '{topping}' is not available for '{menu_item.name}'",
-                        detail=f"toppings_selected: {topping}",
+                        message=f"Topping '{topping_name}' is not available for '{menu_item.name}'",
+                        detail=f"toppings_selected: {topping_name}",
                     )
+                toppings.append(topping)
 
-            menu_items[item.menu_item_id] = menu_item
+            unit_price = menu_item.price + base.price + sum(t.price for t in toppings)
+            resolved.append({
+                "request": item,
+                "menu_item": menu_item,
+                "unit_price": unit_price,
+            })
 
-        return menu_items
+        return resolved
 
     def _find_or_create_customer(self, customer_data: CustomerRequest):
         customer = self._order_repo.find_customer_by_phone(customer_data.phone_number)
@@ -81,16 +102,16 @@ class OrderService:
             customer = self._order_repo.save_customer(customer_data)
         return customer
 
-    def _build_and_save_order_items(self, order_id: int, items: list[OrderItemRequest], menu_items: dict) -> list[OrderItem]:
+    def _build_and_save_order_items(self, order_id: int, resolved_items: list[dict]) -> list[OrderItem]:
         order_items = [
             OrderItem(
                 order_id=order_id,
-                menu_item_id=item.menu_item_id,
-                base_selected=item.base_selected,
-                toppings_selected=item.toppings_selected,
-                quantity=item.quantity,
-                unit_price=menu_items[item.menu_item_id].price,
+                menu_item_id=resolved["request"].menu_item_id,
+                base_selected=resolved["request"].base_selected,
+                toppings_selected=resolved["request"].toppings_selected,
+                quantity=resolved["request"].quantity,
+                unit_price=resolved["unit_price"],
             )
-            for item in items
+            for resolved in resolved_items
         ]
         return self._order_repo.save_order_items(order_items)

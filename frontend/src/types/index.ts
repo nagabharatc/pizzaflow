@@ -2,15 +2,30 @@
 
 export interface MenuItem {
   id: number
+  code: string
   name: string
   category: string
-  available_bases: string[]
-  available_toppings: string[]
+  price: number
+}
+
+export interface Base {
+  id: number
+  code: string
+  name: string
+  price: number
+}
+
+export interface Topping {
+  id: number
+  code: string
+  name: string
   price: number
 }
 
 export interface MenuResponse {
   items: MenuItem[]
+  bases: Base[]
+  toppings: Topping[]
 }
 
 // ── Order ─────────────────────────────────────────────────────────────────────

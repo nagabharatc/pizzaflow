@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import AsyncGenerator
 
 from fastapi import FastAPI
@@ -24,13 +25,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     engine.dispose()
 
 
+_BACKEND_DIR = Path(__file__).resolve().parent.parent
+
+
 def _seed_reference_data() -> None:
+    from app.contexts.reference.repositories.base_repository import BaseRepository
     from app.contexts.reference.repositories.menu_repository import MenuRepository
+    from app.contexts.reference.repositories.topping_repository import ToppingRepository
     from app.contexts.reference.service import MenuLoader
 
     with SessionLocal() as db:
-        loader = MenuLoader(MenuRepository(db))
-        loader.seed_from_file(settings.menu_file_path)
+        loader = MenuLoader(MenuRepository(db), BaseRepository(db), ToppingRepository(db))
+        loader.seed_bases_from_file(str(_BACKEND_DIR / settings.base_file_path))
+        loader.seed_toppings_from_file(str(_BACKEND_DIR / settings.topping_file_path))
+        loader.seed_pizzas_from_file(str(_BACKEND_DIR / settings.menu_file_path))
 
 
 app = FastAPI(title=settings.app_name, debug=settings.debug, lifespan=lifespan)

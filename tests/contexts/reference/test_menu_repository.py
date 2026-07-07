@@ -12,24 +12,9 @@ def repository(db_session) -> MenuRepository:
 @pytest.fixture
 def seeded_items(db_session) -> list[MenuItem]:
     items = [
-        MenuItem(
-            name="Margherita", category="Classic",
-            available_bases=["Thin Crust", "Thick Crust"],
-            available_toppings=["Mozzarella", "Tomato"],
-            price=299.0, is_available=True,
-        ),
-        MenuItem(
-            name="Pepperoni", category="Non-Veg",
-            available_bases=["Thin Crust"],
-            available_toppings=["Pepperoni", "Mozzarella"],
-            price=399.0, is_available=True,
-        ),
-        MenuItem(
-            name="Discontinued Pizza", category="Classic",
-            available_bases=["Thin Crust"],
-            available_toppings=["Cheese"],
-            price=199.0, is_available=False,
-        ),
+        MenuItem(code="P1", name="Margherita", category="Pizza", price=299.0, is_available=True),
+        MenuItem(code="P2", name="Pepperoni", category="Pizza", price=399.0, is_available=True),
+        MenuItem(code="P3", name="Discontinued Pizza", category="Pizza", price=199.0, is_available=False),
     ]
     db_session.add_all(items)
     db_session.commit()
@@ -81,12 +66,7 @@ def test_count_returns_zero_when_empty(repository):
 
 def test_save_items_persists_to_database(repository, db_session):
     new_items = [
-        MenuItem(
-            name="Farmhouse", category="Veg",
-            available_bases=["Thick Crust"],
-            available_toppings=["Corn", "Capsicum"],
-            price=349.0, is_available=True,
-        ),
+        MenuItem(code="P4", name="Farmhouse", category="Pizza", price=349.0, is_available=True),
     ]
 
     repository.save_items(new_items)
@@ -94,4 +74,4 @@ def test_save_items_persists_to_database(repository, db_session):
     saved = db_session.query(MenuItem).filter_by(name="Farmhouse").first()
     assert saved is not None
     assert saved.price == 349.0
-    assert saved.available_toppings == ["Corn", "Capsicum"]
+    assert saved.code == "P4"

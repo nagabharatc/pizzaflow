@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     openrouter_model: str
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     menu_file_path: str
+    base_file_path: str
+    topping_file_path: str
 
     admin_username: str
     admin_password: str

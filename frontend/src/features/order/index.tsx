@@ -101,7 +101,14 @@ export function OrderPage() {
                   Failed to load menu. Please refresh.
                 </div>
               )}
-              {menu && <PizzaBuilder items={menu.items} onAdd={addToCart} />}
+              {menu && (
+                <PizzaBuilder
+                  items={menu.items}
+                  bases={menu.bases}
+                  toppings={menu.toppings}
+                  onAdd={addToCart}
+                />
+              )}
             </CardContent>
           </Card>
         </div>

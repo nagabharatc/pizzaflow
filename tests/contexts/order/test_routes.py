@@ -1,17 +1,16 @@
 import pytest
 
+from app.contexts.reference.entities.base import Base
 from app.contexts.reference.entities.menu_item import MenuItem
+from app.contexts.reference.entities.topping import Topping
 
 
 @pytest.fixture
 def menu_item(db_session) -> MenuItem:
-    item = MenuItem(
-        name="Margherita", category="Classic",
-        available_bases=["Thin Crust", "Thick Crust"],
-        available_toppings=["Mozzarella", "Tomato Sauce"],
-        price=299.0, is_available=True,
-    )
+    item = MenuItem(code="P1", name="Margherita", category="Pizza", price=299.0, is_available=True)
     db_session.add(item)
+    db_session.add(Base(code="B1", name="Thin Crust", price=149.0))
+    db_session.add(Topping(code="T1", name="Mozzarella", price=69.0))
     db_session.commit()
     return item
 
@@ -59,13 +58,13 @@ def test_submit_order_response_includes_customer(client, valid_payload):
     assert customer["phone_number"] == "9999999999"
 
 
-def test_submit_order_response_includes_items_with_price(client, valid_payload, menu_item):
+def test_submit_order_response_includes_items_with_combined_price(client, valid_payload, menu_item):
     response = client.post("/orders", json=valid_payload)
 
     items = response.json()["items"]
     assert len(items) == 1
     assert items[0]["name"] == "Margherita"
-    assert items[0]["unit_price"] == menu_item.price
+    assert items[0]["unit_price"] == menu_item.price + 149.0 + 69.0
     assert items[0]["quantity"] == 2
 
 
@@ -109,7 +108,7 @@ def test_submit_order_nonexistent_menu_item_returns_404(client):
 def test_submit_order_invalid_base_returns_409(client, menu_item):
     payload = {
         "customer": {"name": "Rajan", "phone_number": "9999999999"},
-        "items": [{"menu_item_id": menu_item.id, "base_selected": "Stuffed Crust", "quantity": 1}],
+        "items": [{"menu_item_id": menu_item.id, "base_selected": "Nonexistent Crust", "quantity": 1}],
     }
 
     response = client.post("/orders", json=payload)

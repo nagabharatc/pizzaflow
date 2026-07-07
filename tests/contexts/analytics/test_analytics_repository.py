@@ -19,8 +19,7 @@ def repository(db_session) -> AnalyticsRepository:
 @pytest.fixture
 def seeded_data(db_session) -> dict:
     menu_item = MenuItem(
-        name="Margherita", category="Classic",
-        available_bases=["Thin Crust"], available_toppings=["Mozzarella"],
+        code="P1", name="Margherita", category="Pizza",
         price=299.0, is_available=True,
     )
     db_session.add(menu_item)

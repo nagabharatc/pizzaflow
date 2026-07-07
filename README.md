@@ -246,6 +246,58 @@ Full schema at `/docs` (Swagger UI) when running locally.
 
 ---
 
+## Deploying to Vercel
+
+Frontend and backend deploy as **two separate Vercel projects**, each with its own domain.
+
+- **Backend**: Root Directory = `backend`. Vercel auto-detects `app/main.py` as a zero-config FastAPI app (no `api/` folder or rewrites needed) — it becomes a single Vercel Function serving `/`, `/menu`, `/orders`, `/auth/login`, etc. directly at the project's own domain. `backend/vercel.json` sets `maxDuration` and `includeFiles` (the `scripts/*.txt` seed data isn't reached via a normal `import`, so it must be explicitly bundled).
+- **Frontend**: Root Directory = `frontend`. Standard Vite static build (framework auto-detected). `frontend/vercel.json` adds a catch-all rewrite to `index.html` so client-side routes (e.g. `/admin/analytics`) don't 404 on a hard refresh.
+
+Because they're on different domains, the frontend talks to the backend over an absolute URL (`VITE_API_BASE_URL`), and the backend's CORS must allow the frontend's domain.
+
+### 1. Create both projects
+
+From the repo root, link each subfolder as its own project (or import the repo twice in the dashboard, setting Root Directory each time):
+
+```bash
+cd backend && vercel link     # Root Directory: backend
+cd ../frontend && vercel link # Root Directory: frontend
+```
+
+### 2. Set environment variables
+
+**Backend project** (Project Settings → Environment Variables):
+
+| Variable | Notes |
+|---|---|
+| `DATABASE_URL` | Use a pooled Postgres connection string (e.g. Supabase's pgbouncer/transaction pooler on port `6543`) — serverless functions open/close connections frequently |
+| `OPENROUTER_API_KEY` | |
+| `OPENROUTER_MODEL` | e.g. `openai/gpt-4o-mini` |
+| `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` |
+| `MENU_FILE_PATH` | `scripts/Types_of_Pizza.txt` (resolved relative to `backend/` at runtime) |
+| `BASE_FILE_PATH` | `scripts/Types_of_Base.txt` |
+| `TOPPING_FILE_PATH` | `scripts/Types_of_Toppings.txt` |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | Admin portal login |
+| `SECRET_KEY` | JWT signing secret |
+| `CORS_ORIGINS` | `["https://<your-frontend-domain>.vercel.app"]` — must include the frontend's real deployed URL |
+
+**Frontend project**:
+
+| Variable | Notes |
+|---|---|
+| `VITE_API_BASE_URL` | `https://<your-backend-domain>.vercel.app` (no trailing slash, no `/api` — the backend's own routes are unprefixed) |
+
+### 3. Deploy each project
+
+```bash
+cd backend && vercel deploy --prod
+cd ../frontend && vercel deploy --prod
+```
+
+Deploy the backend first so you know its URL for the frontend's `VITE_API_BASE_URL`. Once both are up, `GET https://<backend-domain>/menu` should return the seeded menu, and `https://<frontend-domain>/` should load and call it with no CORS errors.
+
+---
+
 ## Design decisions worth noting
 
 **Why is the BI Model never persisted?**  
@@ -264,7 +316,6 @@ Menu prices can change. The `unit_price` on `OrderItem` and `gst_rate` on `Bill`
 
 ## What's next (v2 ideas)
 
-- Production deployment (Railway/Render backend, Vercel frontend, Supabase PostgreSQL)
 - Multi-item order editing before checkout
 - Customer order history and loyalty tracking
 - Scheduled weekly AI digest report
