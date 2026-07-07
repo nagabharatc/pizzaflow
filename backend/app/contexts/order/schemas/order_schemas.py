@@ -4,15 +4,15 @@ from pydantic import BaseModel, Field
 
 
 class CustomerRequest(BaseModel):
-    name: str = Field(min_length=1)
-    phone_number: str = Field(min_length=1)
+    name: str = Field(min_length=1, max_length=15, pattern=r"^[A-Za-z ]+$")
+    phone_number: str = Field(pattern=r"^[6-9]\d{9}$")
 
 
 class OrderItemRequest(BaseModel):
     menu_item_id: int
     base_selected: str = Field(min_length=1)
     toppings_selected: list[str] = []
-    quantity: int = Field(ge=1)
+    quantity: int = Field(ge=1, le=50)
 
 
 class SubmitOrderRequest(BaseModel):

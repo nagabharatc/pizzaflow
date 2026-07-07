@@ -80,6 +80,8 @@ def test_complete_transaction_sets_order_status_to_paid(repository, saved_pendin
     order, bill, payment = repository.complete_transaction(
         order=saved_pending_order,
         subtotal=subtotal,
+        discount_rate=0.0,
+        discount_amount=0.0,
         gst_rate=18.0,
         gst_amount=round(subtotal * 0.18, 2),
         total_amount=round(subtotal * 1.18, 2),
@@ -98,6 +100,8 @@ def test_complete_transaction_persists_bill_with_gst_rate(repository, saved_pend
     order, bill, payment = repository.complete_transaction(
         order=saved_pending_order,
         subtotal=subtotal,
+        discount_rate=0.0,
+        discount_amount=0.0,
         gst_rate=18.0,
         gst_amount=gst_amount,
         total_amount=total,
@@ -121,6 +125,8 @@ def test_complete_transaction_persists_payment(repository, saved_pending_order, 
     order, bill, payment = repository.complete_transaction(
         order=saved_pending_order,
         subtotal=subtotal,
+        discount_rate=0.0,
+        discount_amount=0.0,
         gst_rate=18.0,
         gst_amount=round(subtotal * 0.18, 2),
         total_amount=total,
@@ -143,6 +149,8 @@ def test_complete_transaction_links_payment_to_bill(repository, saved_pending_or
     order, bill, payment = repository.complete_transaction(
         order=saved_pending_order,
         subtotal=subtotal,
+        discount_rate=0.0,
+        discount_amount=0.0,
         gst_rate=18.0,
         gst_amount=round(subtotal * 0.18, 2),
         total_amount=round(subtotal * 1.18, 2),
@@ -151,3 +159,30 @@ def test_complete_transaction_links_payment_to_bill(repository, saved_pending_or
 
     assert payment.bill_id == bill.id
     assert payment.order_id == bill.order_id
+
+
+def test_complete_transaction_persists_nonzero_discount(repository, saved_pending_order, db_session):
+    items = repository.get_order_items(saved_pending_order.id)
+    subtotal = sum(i.unit_price * i.quantity for i in items)
+    discount_amount = round(subtotal * 0.10, 2)
+    taxable = round(subtotal - discount_amount, 2)
+    gst_amount = round(taxable * 0.18, 2)
+    total = round(taxable + gst_amount, 2)
+
+    order, bill, payment = repository.complete_transaction(
+        order=saved_pending_order,
+        subtotal=subtotal,
+        discount_rate=10.0,
+        discount_amount=discount_amount,
+        gst_rate=18.0,
+        gst_amount=gst_amount,
+        total_amount=total,
+        payment_method="card",
+    )
+
+    assert bill.discount_rate == 10.0
+    assert bill.discount_amount == discount_amount
+
+    in_db = db_session.query(Bill).filter_by(order_id=saved_pending_order.id).first()
+    assert in_db.discount_rate == 10.0
+    assert in_db.discount_amount == discount_amount

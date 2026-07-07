@@ -142,7 +142,8 @@ function PizzaCard({ item, bases, toppings, onAdd }: PizzaCardProps) {
                 variant="outline"
                 size="icon"
                 className="h-8 w-8"
-                onClick={() => setQty((q) => q + 1)}
+                onClick={() => setQty((q) => Math.min(50, q + 1))}
+                disabled={qty >= 50}
               >
                 <Plus className="h-3 w-3" />
               </Button>

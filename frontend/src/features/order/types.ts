@@ -2,12 +2,14 @@ import { z } from 'zod'
 
 export const orderFormSchema = z.object({
   customer: z.object({
-    name: z.string().min(1, 'Name is required'),
+    name: z
+      .string()
+      .min(1, 'Name is required')
+      .max(15, 'Name must be at most 15 characters')
+      .regex(/^[A-Za-z ]+$/, 'Name cannot contain numbers or special characters'),
     phone_number: z
       .string()
-      .min(10, 'Enter a valid 10-digit phone number')
-      .max(15, 'Phone number too long')
-      .regex(/^[0-9+\-\s]+$/, 'Enter a valid phone number'),
+      .regex(/^[6-9]\d{9}$/, 'Enter a valid 10-digit phone number starting with 6-9'),
   }),
 })
 

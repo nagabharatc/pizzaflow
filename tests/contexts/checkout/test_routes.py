@@ -60,9 +60,27 @@ def test_complete_checkout_response_includes_bill(client, pending_order):
     bill = response.json()["bill"]
 
     assert "subtotal" in bill
+    assert "discount_rate" in bill
+    assert "discount_amount" in bill
     assert "gst_rate" in bill
     assert "gst_amount" in bill
     assert "total_amount" in bill
+
+
+def test_complete_checkout_response_includes_itemized_lines(client, pending_order):
+    response = client.post("/checkout", json={
+        "pending_order_id": pending_order.id,
+        "payment_method": "cash",
+    })
+    items = response.json()["items"]
+
+    assert len(items) == 1
+    assert items[0]["name"] == "Margherita"
+    assert items[0]["base_selected"] == "Thin Crust"
+    assert items[0]["toppings_selected"] == []
+    assert items[0]["quantity"] == 2
+    assert items[0]["unit_price"] == 299.0
+    assert items[0]["line_total"] == 598.0
 
 
 def test_complete_checkout_gst_is_18_percent(client, pending_order):
@@ -76,6 +94,60 @@ def test_complete_checkout_gst_is_18_percent(client, pending_order):
     assert bill["subtotal"] == 598.0        # 2 × 299.0
     assert bill["gst_amount"] == 107.64     # 598 × 18%
     assert bill["total_amount"] == 705.64   # 598 + 107.64
+
+
+def test_complete_checkout_no_discount_below_default_threshold(client, pending_order):
+    # pending_order has quantity 2, below the default threshold of 5 (table is empty in tests)
+    response = client.post("/checkout", json={
+        "pending_order_id": pending_order.id,
+        "payment_method": "cash",
+    })
+    bill = response.json()["bill"]
+
+    assert bill["discount_rate"] == 0.0
+    assert bill["discount_amount"] == 0.0
+
+
+@pytest.fixture
+def bulk_pending_order(db_session) -> Order:
+    menu_item = MenuItem(
+        code="P1", name="Margherita", category="Pizza",
+        price=100.0, is_available=True,
+    )
+    db_session.add(menu_item)
+    db_session.flush()
+
+    customer = Customer(name="Priya", phone_number="8888888888")
+    db_session.add(customer)
+    db_session.flush()
+
+    order = Order(customer_id=customer.id, status="pending")
+    db_session.add(order)
+    db_session.flush()
+
+    item = OrderItem(
+        order_id=order.id, menu_item_id=menu_item.id,
+        base_selected="Thin Crust", toppings_selected=[],
+        quantity=5, unit_price=100.0,
+    )
+    db_session.add(item)
+    db_session.commit()
+
+    return order
+
+
+def test_complete_checkout_applies_discount_at_or_above_threshold(client, bulk_pending_order):
+    response = client.post("/checkout", json={
+        "pending_order_id": bulk_pending_order.id,
+        "payment_method": "cash",
+    })
+    bill = response.json()["bill"]
+
+    assert bill["subtotal"] == 500.0
+    assert bill["discount_rate"] == 10.0
+    assert bill["discount_amount"] == 50.0
+    assert bill["gst_amount"] == 81.0    # (500 - 50) × 18%
+    assert bill["total_amount"] == 531.0  # 450 + 81
 
 
 def test_complete_checkout_payment_method_recorded(client, pending_order):

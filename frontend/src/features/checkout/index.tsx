@@ -42,6 +42,28 @@ function ReceiptView({ receipt }: { receipt: CompleteCheckoutResponse }) {
 
           <div className="my-4 border-t border-dashed border-border" />
 
+          {/* Itemized lines */}
+          <div className="space-y-2">
+            {receipt.items.map((item, idx) => (
+              <div key={idx} className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm text-foreground">
+                    {item.name} <span className="text-muted-foreground">× {item.quantity}</span>
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {item.base_selected}
+                    {item.toppings_selected.length > 0 && `, ${item.toppings_selected.join(', ')}`}
+                  </p>
+                </div>
+                <span className="font-mono-numbers shrink-0 text-sm text-foreground">
+                  {formatCurrency(item.line_total)}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="my-4 border-t border-dashed border-border" />
+
           {/* Bill breakdown */}
           <div className="space-y-0">
             <div className="receipt-line">
@@ -50,6 +72,16 @@ function ReceiptView({ receipt }: { receipt: CompleteCheckoutResponse }) {
                 {formatCurrency(receipt.bill.subtotal)}
               </span>
             </div>
+            {receipt.bill.discount_amount > 0 && (
+              <div className="receipt-line">
+                <span className="text-sm text-success">
+                  Discount ({receipt.bill.discount_rate}%)
+                </span>
+                <span className="font-mono-numbers text-sm text-success">
+                  −{formatCurrency(receipt.bill.discount_amount)}
+                </span>
+              </div>
+            )}
             <div className="receipt-line">
               <span className="text-sm text-muted-foreground">
                 GST ({receipt.bill.gst_rate}%)

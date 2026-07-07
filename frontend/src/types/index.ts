@@ -80,14 +80,26 @@ export interface CompleteCheckoutRequest {
 
 export interface BillResponse {
   subtotal: number
+  discount_rate: number
+  discount_amount: number
   gst_rate: number
   gst_amount: number
   total_amount: number
 }
 
+export interface CheckoutItemResponse {
+  name: string
+  base_selected: string
+  toppings_selected: string[]
+  quantity: number
+  unit_price: number
+  line_total: number
+}
+
 export interface CompleteCheckoutResponse {
   order_id: number
   status: string
+  items: CheckoutItemResponse[]
   bill: BillResponse
   payment_method: string
   paid_at: string

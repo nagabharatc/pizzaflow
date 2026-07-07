@@ -27,6 +27,8 @@ class CheckoutRepository:
         self,
         order: Order,
         subtotal: float,
+        discount_rate: float,
+        discount_amount: float,
         gst_rate: float,
         gst_amount: float,
         total_amount: float,
@@ -38,6 +40,8 @@ class CheckoutRepository:
         bill = Bill(
             order_id=order.id,
             subtotal=subtotal,
+            discount_rate=discount_rate,
+            discount_amount=discount_amount,
             gst_rate=gst_rate,
             gst_amount=gst_amount,
             total_amount=total_amount,
